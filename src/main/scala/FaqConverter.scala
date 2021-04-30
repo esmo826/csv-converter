@@ -2,13 +2,13 @@ package com.leellc.faqconverter
 
 import cats.effect.{Blocker, ContextShift, Sync, IO}
 import cats.implicits._
+import cats.effect.concurrent._
 import fs2.{Stream, io, text}
 import java.nio.file.Path
+import cats.instances.boolean
 
 trait FaqConverter[F[_]] {
-
-  def convert(input: Path, output: Path): F[Unit]
-
+  def convert(input: Path, output: Path): F[Int]
 }
 
 object FaqConverter {
@@ -22,33 +22,36 @@ object FaqConverter {
     Sync[F].delay {
 
       new FaqConverter[F] {
-        override def convert(input: Path, output: Path): F[Unit] = {
+        override def convert(input: Path, output: Path): F[Int] = {
 
           def recordStringToFaqRecords(recordString: String): List[FaqRecord] = {
-            val faqWithProducts: List[String] = recordString.split(",").map(_.trim).toList
-            val faqId = faqWithProducts.head
-            val productIds = faqWithProducts.tail
-            // val fixError1 =
-            //   productIds.flatMap(s => if (s.contains(".")) s.split(".").map(_.trim).toList else List(s))
-            // val fixError2 = fixError1.flatMap(s =>
-            //   if (s.startsWith("NP0") && s.size == 18) s.splitAt(9).productIterator.toList.map(_.toString)
-            //   else List(s)
-            // )
-            // fixError2.map(pid => FaqRecord(faqId, pid))
+            val faqId = recordString.takeWhile( _ != ',')
+            val productIds = recordString.dropWhile( _ != '"').replaceAll("\"", "").split(",").map(_.trim).toList
             productIds.map(pid => FaqRecord(faqId, pid));
           }
 
-          val result: Stream[F, Unit] = io.file
+          val countRefF = Ref.of[F, Int](0)
+
+          countRefF.flatMap { ref =>
+            val result: Stream[F, Unit] = io.file
             .readAll[F](input, blocker, 4096)
             .through(text.utf8Decode)
             .through(text.lines)
-            .filter(s => !s.trim.isEmpty && !s.startsWith("//"))
-            .map(line => recordStringToFaqRecords(line).mkString("\n"))
+            .filter( s =>
+              !s.trim.isEmpty && !s.startsWith("//") && !s.trim.contains("ANSWER ID,Product SKU")
+            )
+            .evalTap { _ =>
+              ref.update(_ + 1)
+            }
+            .map { line =>
+              recordStringToFaqRecords(line).mkString("\n")
+            }
             .intersperse("\n")
             .through(text.utf8Encode)
             .through(io.file.writeAll(output, blocker))
 
-          result.compile.drain
+            result.compile.drain.flatMap(_ => ref.get)
+          }
         }
       }
     }

@@ -1,3 +1,6 @@
+enablePlugins(JavaAppPackaging)
+mainClass in Compile := Some("com.leellc.faqconverter.Main")
+
 name := "FaqConverter"
 
 version := "0.1"

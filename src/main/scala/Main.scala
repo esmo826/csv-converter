@@ -18,7 +18,7 @@ object Main
         if (Files.exists(in)) Validated.valid(in)
         else Validated.invalidNel(s"Error: file '$in' does not exist")
     }
-    private val output: Opts[Path] = Opts.option[Path]("out", short = "o", metavar = "outFile", help = "Output CSV file. Default: output.csv")//.withDefault(Paths.get("output.csv"))
+    private val output: Opts[Path] = Opts.option[Path]("out", short = "o", metavar = "outFile", help = "Output CSV file. Default: output.csv")
 
     private val outputMaybe: Opts[Option[Path]] = output.orNone
 

@@ -25,8 +25,20 @@ object FaqConverter {
         override def convert(input: Path, output: Path): F[Int] = {
 
           def recordStringToFaqRecords(recordString: String): List[FaqRecord] = {
-            val faqId = recordString.takeWhile( _ != ',')
-            val productIds = recordString.dropWhile( _ != '"').replaceAll("\"", "").split(",").map(_.trim).toList
+
+            // Does the line contain quotes?
+            val (faqId, productIds) = if (recordString.contains("\"")) {
+              val fId = recordString.takeWhile( _ != ',')
+              val pIds = recordString.dropWhile( _ != '"').replaceAll("\"", "").split(",").map(_.trim).toList
+              (fId, pIds)
+            } else {
+              val faqWithProducts: List[String] = recordString.split(",").map(_.trim).toList
+              faqWithProducts match {
+                case h :: tl => (h, tl)
+                case Nil => (recordString, List.empty)
+              }
+            }
+
             productIds.map(pid => FaqRecord(faqId, pid));
           }
 
